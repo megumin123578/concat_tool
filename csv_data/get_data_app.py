@@ -71,26 +71,12 @@ def run_mode(is_new_mode, folder_path):
     if not video_files:
         print("No videos found in the selected folder.")
         return
+    if os.path.exists(OUTPUT_FILE):
+        os.remove(OUTPUT_FILE)
+        print("Deleted old CSV file.")
 
-    # === Lấy danh sách file đã có (nếu chế độ thêm) ===
-    existing_paths = set()
-    if not is_new_mode and os.path.exists(OUTPUT_FILE):
-        try:
-            df_existing = pd.read_csv(OUTPUT_FILE, usecols=["file_path"], encoding="utf-8-sig")
-            existing_paths = set(df_existing["file_path"].dropna().tolist())
-        except Exception as e:
-            print(f" Error reading existing CSV: {e}")
-
-    if is_new_mode:
-        if os.path.exists(OUTPUT_FILE):
-            os.remove(OUTPUT_FILE)
-            print(" Deleted old CSV file.")
-        stt = 1
-    else:
-        stt = get_last_stt(OUTPUT_FILE) + 1
-
-    # === Chuẩn bị danh sách video cần xử lý ===
-    to_process = [fp for fp in video_files if is_new_mode or fp not in existing_paths]
+    stt = 1
+    to_process = video_files
     print(f"Found {len(to_process)} new videos to process.")
 
     # === Xử lý song song ===
@@ -119,7 +105,6 @@ def run_mode(is_new_mode, folder_path):
     else:
         print("No new videos to add.")
 
-# === Entry point ===
 def main():
     print("=== Video to CSV (Fast Mode with ffprobe + Multithreading) ===")
     folder_path = input("Enter folder path containing videos: ").strip()
@@ -127,17 +112,8 @@ def main():
         print("Invalid folder path.")
         return
 
-    print("\nChoose mode:")
-    print("1️  Clear and process all videos")
-    print("2️  Add only new videos")
-    choice = input("Enter your choice (1 or 2): ").strip()
-
-    if choice == "1":
-        run_mode(True, folder_path)
-    elif choice == "2":
-        run_mode(False, folder_path)
-    else:
-        print("Invalid choice.")
+    # Chạy luôn chế độ clear + process all
+    run_mode(True, folder_path)
 
 if __name__ == "__main__":
     main()
