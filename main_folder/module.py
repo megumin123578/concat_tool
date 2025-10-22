@@ -8,8 +8,6 @@ from google.oauth2.service_account import Credentials
 from pathlib import Path
 import shutil
 
-
-
 def get_file_name(file_path):
     base_name = os.path.basename(file_path)              
     name_without_ext = os.path.splitext(base_name)[0]    
