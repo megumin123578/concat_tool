@@ -11,7 +11,7 @@ SCOPES = [
 CREDS_FILE = "sheet.json"  
 SHEET_NAME = 'Concat'  
 OUTPUT_DIR = r'D:\Output\Number'
-USED_LOG_FILE = r'log_data\number.log'
+USED_LOG_FILE = r'log_data\Number.log'
 SHEET_INDEX = 0
 
 def main():
@@ -113,7 +113,7 @@ def main():
             original_df = original_df.drop(columns=['number_of_vids'])
         original_df.to_excel(EXCEL_FILE, index=False, engine='openpyxl')
         print("Saved all Excel content into Excel file")
-        excel_to_sheet(EXCEL_FILE, SHEET_NAME,1)
+        excel_to_sheet(EXCEL_FILE, SHEET_NAME,SHEET_INDEX)
         print("Updated Google Sheet.")
     except Exception as e:
         print(f"Error: {e}")
