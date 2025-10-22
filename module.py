@@ -2,11 +2,25 @@ import os
 import subprocess
 import json
 from concurrent.futures import ThreadPoolExecutor
-import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from pathlib import Path
 import shutil
+import pandas as pd
+import numpy as np
+import random
+
+def load_used_videos(file):
+    if os.path.exists(file):
+        with open(file, 'r', encoding='utf-8') as f:
+            return set(line.strip() for line in f if line.strip())
+    return set()
+
+def save_used_videos(file, used_set):
+    with open(file, 'w', encoding='utf-8') as f:
+        for path in used_set:
+            f.write(f"{path}\n")
+
 
 def get_file_name(file_path):
     base_name = os.path.basename(file_path)              
@@ -193,17 +207,124 @@ def excel_to_sheet(excel_file, sheet_file, worksheet_index):
     print(f"Đã ghi nội dung vào worksheet index {worksheet_index} trong '{sheet_file}'.")
 
 
-def get_thumbnail_dir(folder_path):
-    if not os.path.exists(folder_path):
-        print(f"Thư mục {folder_path} không tồn tại!")
-        return None
+def clear_excel_file(excel_file):
+    try:
+        columns = ['first vids', 'desired length', 'output directory', 'number_of_vids', 'status']
+        empty_df = pd.DataFrame(columns=columns)
+        empty_df.to_excel(excel_file, index=False, engine='openpyxl')
+        print(f"Cleared existing content in Excel file: {excel_file}")
+    except Exception as e:
+        print(f"Error clearing Excel file '{excel_file}': {e}")
 
-    image_extensions = ('.png', '.jpg', '.jpeg')
+def copy_from_ggsheet_to_excel(gspread_client, sheet_name, excel_file,sheet_index):
+    try:
+        spreadsheet = gspread_client.open(sheet_name)
+        worksheet = spreadsheet.get_worksheet(sheet_index)
+        data = worksheet.get_all_values()
 
-    image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(image_extensions)]
+        if not data:
+            print("Google Sheet is empty!")
+            return
+        
+        columns = data[0]  
+        values = data[1:]  
+        df = pd.DataFrame(values, columns=columns)
+        clear_excel_file(excel_file)
+        df.to_excel(excel_file, index=False, engine='openpyxl')
+        print(f"Successfully copied data from Google {sheet_name} to Excel file {excel_file}")
+    except Exception as e:
+        print(f"Error copying data from Google Sheet to Excel: {e}")
 
-    if len(image_files) == 1:
-        return image_files[0]  
-    else:
-        print(f"Thư mục không chứa file ảnh (.png, .jpg, .jpeg).")
-        return None
+def pre_process_data(file):
+    df = pd.read_excel(file)
+    filtered_df = df[
+        df['first vids'].notna() &
+        df['desired length'].notna() &
+        df['status'].str.lower().eq('auto')
+    ]
+    return filtered_df, df
+
+def convert_time_to_seconds(time_str):
+    try:
+        if isinstance(time_str, (int, float)):
+            return float(time_str)
+        parts = time_str.strip().split(':')
+        parts = [int(p) for p in parts]
+        if len(parts) == 3:
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        elif len(parts) == 2:
+            return parts[0] * 60 + parts[1]
+        elif len(parts) == 1:
+            return int(parts[0])
+        else:
+            return 0
+    except:
+        return 0
+    
+def prepare_original_data(csv_file):
+    try:
+        df = pd.read_csv(csv_file, encoding='utf-8-sig')
+        durations = np.array([convert_time_to_seconds(d) for d in df['duration']])
+        last_used = np.array([convert_time_to_seconds(t) for t in df['lastest_used_value']])
+        file_paths = df['file_path'].tolist()
+        return durations, last_used, file_paths, df
+    except FileNotFoundError:
+        print(f"Error: CSV file '{csv_file}' not found.")
+        return None, None, None, None
+    except KeyError as e:
+        print(f"Error: Missing column {e} in the CSV file.")
+        return None, None, None, None
+    except Exception as e:
+        print(f"Unexpected error reading CSV: {str(e)}")
+        return None, None, None, None
+    
+def generate_video_lists(suitable_df, durations, last_used, file_paths):
+    results = []
+    for i in range(len(suitable_df)):
+        num_lists = 1  # Force number_of_vids to 1
+        desired_length = float(suitable_df.iloc[i]['desired length']) * 60
+        first_vid_number = str(suitable_df.iloc[i]['first vids'])
+
+        first_vd = find_first_vid(first_vid_number)
+        first_path, first_duration = first_vd[0], convert_time_to_seconds(first_vd[1])
+        if not first_path:
+            print(f"Không tìm thấy video đầu tiên cho {first_vid_number}")
+            continue
+
+        for list_index in range(num_lists):
+            available_indexes = [
+                idx for idx in range(len(file_paths))
+                if last_used[idx] >= 0
+            ]
+
+            total_duration = first_duration
+            selected_indexes = []
+            selected_paths = [first_path]
+
+            while available_indexes and total_duration < desired_length:
+                chosen_index = random.choice(available_indexes)
+                total_duration += durations[chosen_index]
+                selected_indexes.append(chosen_index)
+                selected_paths.append(file_paths[chosen_index])
+                available_indexes.remove(chosen_index)
+
+            results.append({
+                'name': first_vid_number,
+                'group_index': i,
+                'list_number': list_index + 1,
+                'selected_files': selected_paths,
+                'total_duration': total_duration
+            })
+
+    return results
+
+def format_and_print_results(results):
+    for item in results:
+        minutes = int(item['total_duration']) // 60
+        seconds = int(item['total_duration']) % 60
+        print(f"\nList {item['list_number']}:")
+        print(f"Total duration: {minutes:02}:{seconds:02}")
+        print("Files:")
+        for f in item['selected_files']:
+            print("  ", f)
+    
