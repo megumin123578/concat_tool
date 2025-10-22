@@ -42,10 +42,4 @@ while True:
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
     time.sleep(30)
-    ############ 6 ##############
-    print("Running show_asmr.py ...")
-    try:
-        subprocess.run(["python", "show_asmr.py"], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error: {e}")
-    time.sleep(30)
+

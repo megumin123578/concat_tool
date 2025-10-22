@@ -109,15 +109,12 @@ def main():
 
     #Lưu file Excel & cập nhật Google Sheet
     try:
-        if 'number_of_vids' in original_df.columns:
-            original_df = original_df.drop(columns=['number_of_vids'])
         original_df.to_excel(EXCEL_FILE, index=False, engine='openpyxl')
-        print("Saved all Excel content into Excel file")
-        excel_to_sheet(EXCEL_FILE, SHEET_NAME,SHEET_INDEX)
-        print("Updated Google Sheet.")
+        print("Saved updated Excel file (only modified rows).")
+        excel_to_sheet(EXCEL_FILE, SHEET_NAME, SHEET_INDEX)
+        print("Updated Google Sheet (only modified rows).")
     except Exception as e:
-        print(f"Error: {e}")
-
+        print(f"Error updating Google Sheet: {e}")
     #Lưu log video đã dùng
     used_video_paths.update(newly_used_paths)
     save_used_videos(USED_LOG_FILE, used_video_paths)

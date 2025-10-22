@@ -179,32 +179,68 @@ def print_video_info(video_path):
         print(f"Lỗi khi đọc thông tin video: {e}")
 
 
-def excel_to_sheet(excel_file, sheet_file, worksheet_index):
-    df = pd.read_excel(excel_file, engine="openpyxl")
+import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
 
+def excel_to_sheet(excel_file, sheet_file, worksheet_index):
+    # Đọc dữ liệu Excel
+    df_local = pd.read_excel(excel_file, engine="openpyxl").fillna('')
+
+    # Thiết lập quyền truy cập Google Sheets
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
     CREDS_FILE = "sheet.json"
-
     creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
 
     spreadsheet = gc.open(sheet_file)
 
     try:
-        worksheet = spreadsheet.get_worksheet(worksheet_index)  # Lấy theo index
+        worksheet = spreadsheet.get_worksheet(worksheet_index)
     except Exception as e:
         print(f"Không thể lấy worksheet tại index {worksheet_index}: {e}")
         return
 
-    worksheet.clear()
+    # Đọc toàn bộ dữ liệu hiện tại từ Google Sheet
+    data = worksheet.get_all_values()
+    if not data:
+        print("⚠️ Google Sheet đang rỗng, không thể đối chiếu.")
+        return
 
-    data = [df.columns.tolist()] + df.fillna('').astype(str).values.tolist()
-    worksheet.update("A1", data)
+    # Chuyển sheet thành DataFrame để dễ xử lý
+    df_remote = pd.DataFrame(data[1:], columns=data[0]).fillna('')
 
-    print(f"Đã ghi nội dung vào worksheet index {worksheet_index} trong '{sheet_file}'.")
+    # Chuẩn hóa tên cột để khớp với Excel
+    df_remote.columns = df_remote.columns.str.strip().str.lower()
+    df_local.columns = df_local.columns.str.strip().str.lower()
+
+    if 'first vids' not in df_local.columns:
+        print("❌ Không tìm thấy cột 'first vids' trong Excel.")
+        return
+
+    # Lấy danh sách các 'first vids' trong Excel (những dòng cần cập nhật)
+    target_first_vids = df_local['first vids'].astype(str).tolist()
+    updated_count = 0
+
+    # Duyệt từng dòng trong Google Sheet, nếu khớp 'first vids' → update giá trị từ Excel
+    for i, row in df_remote.iterrows():
+        first_vid_val = str(row.get('first vids', '')).strip()
+        if first_vid_val in target_first_vids:
+            # Tìm dòng tương ứng trong Excel
+            row_local = df_local[df_local['first vids'].astype(str).str.strip() == first_vid_val]
+            if not row_local.empty:
+                # Lấy hàng đầu tiên khớp
+                new_values = row_local.iloc[0].fillna('').astype(str).tolist()
+                # Cập nhật toàn bộ dòng (vì có thể nhiều cột thay đổi)
+                cell_range = f"A{i+2}"  # +2 vì Google Sheet bắt đầu từ hàng 1 (header)
+                worksheet.update(cell_range, [new_values])
+                updated_count += 1
+
+    print(f" Đã cập nhật {updated_count} hàng có cùng 'first vids' trong '{sheet_file}'.")
+
 
 
 def clear_excel_file(excel_file):
