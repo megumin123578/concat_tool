@@ -5,6 +5,12 @@ import pandas as pd
 
 
 while True:
+    try:
+        subprocess.run(["python", "csv_data\get_data.py"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e}")
+    time.sleep(30)
+
     for _ in range(100):
         ############ 1 ##############
         print("Running tuan_number.py ...")
@@ -46,4 +52,4 @@ while True:
         except subprocess.CalledProcessError as e:
             print(f"Error: {e}")
         time.sleep(30)
-    subprocess.run(["python","csv_data\get_data.py"])
+    

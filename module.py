@@ -9,6 +9,21 @@ import shutil
 import pandas as pd
 import numpy as np
 import random
+from datetime import datetime
+
+# === Cấu hình log ===
+LOG_DIR = "log_data\logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, f"{datetime.now().strftime('%Y-%m-%d')}.log")
+
+def log_run(cmd, **kwargs):
+    """Chạy subprocess và ghi toàn bộ stdout/stderr vào file log theo ngày."""
+    with open(LOG_FILE, "a", encoding="utf-8") as log:
+        log.write(f"\n=== [{datetime.now().strftime('%H:%M:%S')}] {' '.join(cmd)} ===\n")
+        result = subprocess.run(cmd, stdout=log, stderr=log, text=True, **kwargs)
+        log.write("\n")
+    return result
+
 
 def load_used_videos(file):
     if os.path.exists(file):
@@ -29,18 +44,20 @@ def get_file_name(file_path):
 
 def get_video_duration(file_path):
     try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
-             "-of", "default=noprint_wrappers=1:nokey=1", file_path],
-            capture_output=True, text=True
-        )
+        cmd = [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", file_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         duration = float(result.stdout.strip())
         minute = int(duration) // 60
         sec = int(duration) % 60
         return f"{minute}:{sec:02}"
     except Exception as e:
-        print(f"Error getting duration for '{file_path}': {e}")
+        with open(LOG_FILE, "a", encoding="utf-8") as log:
+            log.write(f"[ERROR] get_video_duration({file_path}): {e}\n")
         return "0:00"
+
 
 def find_first_vid(first_vd):
     first_vd = first_vd.strip().strip('"')
@@ -57,7 +74,6 @@ def normalize_video(
     v_bitrate="12M",
     a_bitrate="160k",
 ):
-     # Kiểm tra input/output có đúng định dạng string không
     if not isinstance(input_path, str) or not isinstance(output_path, str):
         raise TypeError(f"Đường dẫn input/output không hợp lệ: input={input_path}, output={output_path}")
 
@@ -95,9 +111,8 @@ def normalize_video(
         "-vf", f"scale={width}:{height}:flags=lanczos,fps={fps}",
         *video_args,
         "-pix_fmt", "yuv420p",
-        # "-vsync", "cfr",
-        "-fps_mode", "cfr",     
-        "-r", str(fps),         
+        "-fps_mode", "cfr",
+        "-r", str(fps),
         "-movflags", "+faststart",
         "-c:a", "aac",
         "-ar", "48000",
@@ -105,7 +120,7 @@ def normalize_video(
         output_path
     ]
 
-    subprocess.run(command, check=True)
+    log_run(command, check=True)
 
 
 
@@ -123,9 +138,8 @@ def concat_video(video_paths, output_path):
         "-c", "copy",
         output_path
     ]
-    subprocess.run(command, check=True)
+    log_run(command, check=True)
     os.remove(list_file)
-
 
 def auto_concat(input_videos, output_path):
     normalized_paths = []
@@ -149,34 +163,25 @@ def auto_concat(input_videos, output_path):
 
 # debug
 def print_video_info(video_path):
-    print(f"\n🔍 Đang kiểm tra: {video_path}")
+    with open(LOG_FILE, "a", encoding="utf-8") as log:
+        log.write(f"\n🔍 Đang kiểm tra: {video_path}\n")
 
     try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", video_path],
-            capture_output=True, text=True, check=True, encoding='utf-8' # THÊM encoding='utf-8'
-        )
-        info = json.loads(result.stdout)
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-print_format", "json",
+            "-show_streams", "-show_format",
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        info = json.loads(result.stdout or "{}")
 
-        for stream in info.get("streams", []):
-            if stream.get("codec_type") == "video":
-                print(f"VIDEO:")
-                print(f"  Codec: {stream.get('codec_name')}")
-                print(f"  Resolution: {stream.get('width')}x{stream.get('height')}")
-                print(f"  FPS: {eval(stream.get('r_frame_rate')):.2f}")
-                print(f"  Pixel format: {stream.get('pix_fmt')}")
-            elif stream.get("codec_type") == "audio":
-                print(f"AUDIO:")
-                print(f"  Codec: {stream.get('codec_name')}")
-                print(f"  Sample rate: {stream.get('sample_rate')} Hz")
-                print(f"  Channels: {stream.get('channels')}")
-        
-        format_info = info.get("format", {})
-        duration = float(format_info.get("duration", 0))
-        print(f"Duration: {duration:.2f} seconds")
-
+        with open(LOG_FILE, "a", encoding="utf-8") as log:
+            log.write(json.dumps(info, indent=2, ensure_ascii=False))
+            log.write("\n")
     except Exception as e:
-        print(f"Lỗi khi đọc thông tin video: {e}")
+        with open(LOG_FILE, "a", encoding="utf-8") as log:
+            log.write(f"Lỗi khi đọc thông tin video: {e}\n")
 
 
 import pandas as pd
@@ -207,7 +212,7 @@ def excel_to_sheet(excel_file, sheet_file, worksheet_index):
     # Đọc toàn bộ dữ liệu hiện tại từ Google Sheet
     data = worksheet.get_all_values()
     if not data:
-        print("⚠️ Google Sheet đang rỗng, không thể đối chiếu.")
+        print(" Google Sheet đang rỗng, không thể đối chiếu.")
         return
 
     # Chuyển sheet thành DataFrame để dễ xử lý
@@ -218,7 +223,7 @@ def excel_to_sheet(excel_file, sheet_file, worksheet_index):
     df_local.columns = df_local.columns.str.strip().str.lower()
 
     if 'first vids' not in df_local.columns:
-        print("❌ Không tìm thấy cột 'first vids' trong Excel.")
+        print("Không tìm thấy cột 'first vids' trong Excel.")
         return
 
     # Lấy danh sách các 'first vids' trong Excel (những dòng cần cập nhật)
