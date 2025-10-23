@@ -6,11 +6,11 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 JOBS = [
-    ("Number", r"E:"),
-    ("Tractor", r"D:\Video"),
-    ("Thomas",r"F:\Thomas"),
-    ("Doll",r'F:\Doll'),
-    ("Lolipop",r"\\MINGSEO2\Khay den")
+    ("Number", [r"E:\Number A\Video", r"E:\Number B\Video", r"E:\Number SLime\Video", r"E:\Number TC\Video", r"E:\Rainbow Number\Video"]),
+    ("Tractor", [r"D:\Video"]),
+    ("Thomas", [r"F:\Thomas"]),
+    ("Doll", [r"F:\Doll"]),
+    ("Lolipop", [r"\\MINGSEO2\Khay den"])
 ]
 
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov'}
@@ -36,7 +36,6 @@ def get_file_list(folder_path, extensions=None):
         return []
 
 def get_video_duration_seconds(file_path):
-    """Dùng ffprobe để lấy thời lượng video tính theo giây."""
     try:
         cmd = [
             "ffprobe", "-v", "error",
@@ -55,7 +54,6 @@ def format_duration(seconds):
     return f"{minute}:{sec:02d}"
 
 def get_creation_age_seconds(file_path):
-    """Số giây đã trôi qua kể từ lần sửa đổi gần nhất (mtime)."""
     try:
         mtime = os.path.getmtime(file_path)
         now = datetime.now().timestamp()
@@ -64,34 +62,58 @@ def get_creation_age_seconds(file_path):
     except Exception:
         return 0
 
+def is_valid_video(file_path):
+    """Trả về True nếu video >= MIN_DURATION_SECONDS."""
+    return get_video_duration_seconds(file_path) >= MIN_DURATION_SECONDS
+
 def process_video(file_path, stt):
     duration_sec = get_video_duration_seconds(file_path)
     if duration_sec < MIN_DURATION_SECONDS:
-        return None  # bỏ qua video ngắn hơn ngưỡng
+        return None
     duration = format_duration(duration_sec)
     age_seconds = get_creation_age_seconds(file_path)
-    # Giữ nguyên tên cột "lastest_used_value" cho tương thích pipeline cũ
     return [stt, file_path, duration, age_seconds]
 
-def run_one_job(csv_name, folder_path):
-    """Quét folder -> ghi csv_data/<csv_name>.csv"""
-    print(f"\n=== Job: {csv_name} | Folder: {folder_path}")
-    video_files = get_file_list(folder_path, VIDEO_EXTENSIONS)
-    if not video_files:
+def run_one_job(csv_name, folder_paths):
+    print(f"\n=== Job: {csv_name} ===")
+    all_videos = []
+    for path in folder_paths:
+        videos = get_file_list(path, VIDEO_EXTENSIONS)
+        print(f"[INFO] Found {len(videos)} videos in {path}")
+        all_videos.extend(videos)
+
+    if not all_videos:
         print("[INFO] No videos found.")
         return
 
-    # Sắp xếp để STT ổn định theo tên file (có thể bỏ nếu muốn giữ nguyên thứ tự os.walk)
-    video_files.sort(key=lambda p: os.path.basename(p).lower())
+    # === Đếm số video hợp lệ (>=60s) ===
+    valid_count = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(is_valid_video, fp): fp for fp in all_videos}
+        for future in as_completed(futures):
+            if future.result():
+                valid_count += 1
 
     output_file = os.path.join(CSV_OUTPUT_DIR, f"{csv_name}.csv")
-    if os.path.exists(output_file):
-        os.remove(output_file)
-        print(f"[INFO] Deleted old CSV file: {output_file}")
 
+    # === Kiểm tra nếu CSV cũ có cùng số lượng hợp lệ ===
+    if os.path.exists(output_file):
+        try:
+            old_df = pd.read_csv(output_file)
+            old_count = len(old_df)
+            if old_count == valid_count:
+                print(f"[SKIP] {csv_name}: same valid count ({valid_count} videos).")
+                return
+            else:
+                print(f"[INFO] Valid count changed: old={old_count}, new={valid_count}. Updating...")
+        except Exception as e:
+            print(f"[WARN] Cannot read old CSV ({e}), will rebuild.")
+
+    # === Thực sự xử lý và lưu CSV ===
+    all_videos.sort(key=lambda p: os.path.basename(p).lower())
     results = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(process_video, fp, i+1): fp for i, fp in enumerate(video_files)}
+        futures = {executor.submit(process_video, fp, i+1): fp for i, fp in enumerate(all_videos)}
         for idx, future in enumerate(as_completed(futures), 1):
             fp = futures[future]
             try:
@@ -105,28 +127,22 @@ def run_one_job(csv_name, folder_path):
                 print(f"[ERR] {fp}: {e}")
 
     if results:
-        columns = ["stt", "file_path", "duration", "lastest_used_value"]
-        df = pd.DataFrame(results, columns=columns)
+        df = pd.DataFrame(results, columns=["stt", "file_path", "duration", "lastest_used_value"])
         df.to_csv(output_file, index=False, encoding="utf-8-sig")
         print(f"[DONE] Saved to {output_file} ({len(df)} valid videos)")
     else:
         print("[INFO] No valid videos to save.")
 
 def main():
-    print("=== Video -> CSV (Batch via JOBS only) ===")
-    if not JOBS:
-        print("[ABORT] JOBS trống. Hãy khai báo JOBS trong file.")
-        return
-
-    for csv_name, folder_path in JOBS:
-        folder_path = str(folder_path).strip()
-        if not csv_name or not folder_path:
-            print(f"[SKIP] Invalid job: ({csv_name!r}, {folder_path!r})")
+    print("=== Video → CSV (Skip if same valid count) ===")
+    for csv_name, paths in JOBS:
+        if isinstance(paths, str):
+            paths = [paths]
+        valid_paths = [p for p in paths if os.path.isdir(p)]
+        if not valid_paths:
+            print(f"[SKIP] Invalid paths for {csv_name}: {paths}")
             continue
-        if not os.path.isdir(folder_path):
-            print(f"[SKIP] Invalid folder: {folder_path}")
-            continue
-        run_one_job(csv_name, folder_path)
+        run_one_job(csv_name, valid_paths)
 
 if __name__ == "__main__":
     main()
