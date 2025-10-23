@@ -13,7 +13,7 @@ SHEET_NAME = 'Concat'
 OUTPUT_DIR = r'D:\Output\Tractor'
 USED_LOG_FILE = r'log_data\Tractor.log'
 SHEET_INDEX = 1
-
+NAME_FILE = 'Tractor'
 def main():
     try:
         creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
@@ -91,7 +91,7 @@ def main():
     # Bước 3: Ghép video + cập nhật Excel
     for ls in results:
         name = get_file_name(ls['name'])
-        filename = f"{name}_Tuan_number_ghep.mp4"
+        filename = f"{name}_{NAME_FILE}.mp4"
         output_path = os.path.join(OUTPUT_DIR, filename)
         auto_concat(ls['selected_files'], output_path)
 
