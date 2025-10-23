@@ -53,15 +53,6 @@ def format_duration(seconds):
     sec = int(seconds % 60)
     return f"{minute}:{sec:02d}"
 
-def get_creation_age_seconds(file_path):
-    try:
-        mtime = os.path.getmtime(file_path)
-        now = datetime.now().timestamp()
-        age = int(now - mtime)
-        return age if age >= 0 else 0
-    except Exception:
-        return 0
-
 def is_valid_video(file_path):
     """Trả về True nếu video >= MIN_DURATION_SECONDS."""
     return get_video_duration_seconds(file_path) >= MIN_DURATION_SECONDS
@@ -71,8 +62,7 @@ def process_video(file_path, stt):
     if duration_sec < MIN_DURATION_SECONDS:
         return None
     duration = format_duration(duration_sec)
-    age_seconds = get_creation_age_seconds(file_path)
-    return [stt, file_path, duration, age_seconds]
+    return [stt, file_path, duration]
 
 def run_one_job(csv_name, folder_paths):
     print(f"\n=== Job: {csv_name} ===")
@@ -127,7 +117,7 @@ def run_one_job(csv_name, folder_paths):
                 print(f"[ERR] {fp}: {e}")
 
     if results:
-        df = pd.DataFrame(results, columns=["stt", "file_path", "duration", "lastest_used_value"])
+        df = pd.DataFrame(results, columns=["stt", "file_path", "duration"])
         df.to_csv(output_file, index=False, encoding="utf-8-sig")
         print(f"[DONE] Saved to {output_file} ({len(df)} valid videos)")
     else:

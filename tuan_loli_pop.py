@@ -28,7 +28,7 @@ def main():
         if suitable_df.empty:
             print("No suitable data found for processing (status='auto' with non-null 'first vids' and 'desired length').")
             return
-        durations, last_used, file_paths, csv_df = prepare_original_data(CSV_FILE)
+        durations, file_paths, csv_df = prepare_original_data(CSV_FILE)
         if csv_df is None:
             print("Failed to load data from CSV. Exiting.")
             return

@@ -306,9 +306,8 @@ def prepare_original_data(csv_file):
     try:
         df = pd.read_csv(csv_file, encoding='utf-8-sig')
         durations = np.array([convert_time_to_seconds(d) for d in df['duration']])
-        last_used = np.array([convert_time_to_seconds(t) for t in df['lastest_used_value']])
         file_paths = df['file_path'].tolist()
-        return durations, last_used, file_paths, df
+        return durations, file_paths, df
     except FileNotFoundError:
         print(f"Error: CSV file '{csv_file}' not found.")
         return None, None, None, None
