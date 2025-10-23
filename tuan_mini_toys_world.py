@@ -105,7 +105,6 @@ def main():
             original_df.at[row_index, 'output directory'] = f"{current_value}\n{output_path}"
 
         original_df.at[row_index, 'status'] = 'Done'
-        original_df.at[row_index, 'number_of_vids'] = 1
 
     #Lưu file Excel & cập nhật Google Sheet
     try:
