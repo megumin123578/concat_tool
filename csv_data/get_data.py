@@ -9,7 +9,7 @@ JOBS = [
     ("Number", [r"E:\Number A\Video", r"E:\Number B\Video", r"E:\Number SLime\Video", r"E:\Number TC\Video", r"E:\Rainbow Number\Video"]),
     ("Tractor", [r"D:\Video"]),
     ("Thomas", [r"F:\Thomas"]),
-    ("Doll", [r"F:\Doll"]),
+    ("Doll", [r"F:\Doll\Video"]),
     ("Lolipop", [r"\\MINGSEO2\Khay den"])
 ]
 

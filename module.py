@@ -90,7 +90,8 @@ def normalize_video(
             "-b:v", v_bitrate,
             "-maxrate", v_bitrate,
             "-bufsize", str(int(int(v_bitrate[:-1]) * 2)) + "M" if v_bitrate.endswith("M") else "16M",
-            "-preset", "p4",
+            "-preset", "medium",
+            "-vsync", "1",
         ]
     else:
         vcodec = "libx264"
@@ -108,10 +109,9 @@ def normalize_video(
         "ffmpeg", "-y",
         "-fflags", "+genpts",
         "-i", input_path,
-        "-vf", f"scale={width}:{height}:flags=lanczos,fps={fps}",
+        "-vf", f"scale={width}:{height}:flags=bicubic,fps={fps}",
         *video_args,
         "-pix_fmt", "yuv420p",
-        "-fps_mode", "cfr",
         "-r", str(fps),
         "-movflags", "+faststart",
         "-c:a", "aac",
@@ -121,7 +121,6 @@ def normalize_video(
     ]
 
     log_run(command, check=True)
-
 
 
 def concat_video(video_paths, output_path):
