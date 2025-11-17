@@ -109,7 +109,7 @@ def normalize_video(
         "ffmpeg", "-y",
         "-fflags", "+genpts",
         "-i", input_path,
-        "-vf", f"scale={width}:{height}:flags=bicubic,fps={fps}",
+        "-vf", f"scale={width}:{height},fps={fps}",
         *video_args,
         "-pix_fmt", "yuv420p",
         "-r", str(fps),
