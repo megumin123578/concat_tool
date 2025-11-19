@@ -96,6 +96,14 @@ def main():
         output_path = os.path.join(OUTPUT_DIR, filename)
         auto_concat(ls['selected_files'], output_path)
 
+        mapping_log = r"log_data\mapping_log\lolipop.log"
+        with open(mapping_log, "a", encoding="utf-8") as f:
+            f.write("\n==============================\n")
+            f.write(f"OUTPUT: {output_path}\n")
+            f.write("INPUTS:\n")
+            for p in ls['selected_files']:
+                f.write(f"{p}\n")
+
         group_index = ls['group_index']
         row_index = suitable_df.index[group_index]
 
