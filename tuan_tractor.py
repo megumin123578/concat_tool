@@ -94,14 +94,15 @@ def main():
         filename = f"{name}_{NAME_FILE}.mp4"
         output_path = os.path.join(OUTPUT_DIR, filename)
         auto_concat(ls['selected_files'], output_path)
-
         mapping_log = r"log_data\mapping_log\tractor.log"
+        os.makedirs(os.path.dirname(mapping_log), exist_ok=True)
         with open(mapping_log, "a", encoding="utf-8") as f:
             f.write("\n==============================\n")
             f.write(f"OUTPUT: {output_path}\n")
             f.write("INPUTS:\n")
             for p in ls['selected_files']:
                 f.write(f"{p}\n")
+            f.write("\n==============================\n")
 
         group_index = ls['group_index']
         row_index = suitable_df.index[group_index]
@@ -113,14 +114,15 @@ def main():
             original_df.at[row_index, 'output directory'] = f"{current_value}\n{output_path}"
 
         original_df.at[row_index, 'status'] = 'Done'
-    #Lưu file Excel & cập nhật Google Sheet
-    try:
+        #Lưu file Excel & cập nhật Google Sheet
+        
         original_df.to_excel(EXCEL_FILE, index=False, engine='openpyxl')
-        print("Saved updated Excel file (only modified rows).")
-        excel_to_sheet(EXCEL_FILE, SHEET_NAME, SHEET_INDEX)
-        print("Updated Google Sheet (only modified rows).")
-    except Exception as e:
-        print(f"Error updating Google Sheet: {e}")
+        print(f"Saved updated Excel file to row {row_index}.")
+        try:
+            update_row_to_sheet(row_index, original_df.loc[row_index], SHEET_NAME, SHEET_INDEX)
+            print(f"Updated Google Sheet to row {row_index}.")
+        except Exception as e:
+            print(f"Error updating Google Sheet: {e}")
     #Lưu log video đã dùng
     used_video_paths.update(newly_used_paths)
     save_used_videos(USED_LOG_FILE, used_video_paths)
