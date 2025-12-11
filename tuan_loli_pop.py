@@ -33,48 +33,13 @@ def main():
             print("Failed to load data from CSV. Exiting.")
             return
         used_video_paths = load_used_videos(USED_LOG_FILE)
-        results = []
-        newly_used_paths = set()
-        for i in range(len(suitable_df)):
-            num_lists = 1
-            desired_length = float(suitable_df.iloc[i]['desired length']) * 60
-            first_vid_number = str(suitable_df.iloc[i]['first vids'])
-
-            first_vd = find_first_vid(first_vid_number)
-            first_path, first_duration = first_vd[0], convert_time_to_seconds(first_vd[1])
-            if not first_path:
-                print(f"Không tìm thấy video đầu tiên cho {first_vid_number}")
-                continue
-
-            for list_index in range(num_lists):
-                available_indexes = [
-                    idx for idx in range(len(file_paths))
-                    if file_paths[idx] not in used_video_paths
-                ]
-                # Reset nếu đã dùng hết
-                if not available_indexes:
-                    print("Đã dùng hết video, reset log.")
-                    used_video_paths.clear()
-                    available_indexes = list(range(len(file_paths)))
-                total_duration = first_duration
-                selected_paths = [first_path]
-                newly_used_paths.add(first_path)
-
-                while available_indexes and total_duration < desired_length:
-                    chosen_index = random.choice(available_indexes)
-                    path = file_paths[chosen_index]
-                    if path not in used_video_paths:
-                        total_duration += durations[chosen_index]
-                        selected_paths.append(path)
-                        newly_used_paths.add(path)
-                    available_indexes.remove(chosen_index)
-                results.append({
-                    'name': first_vid_number,
-                    'group_index': i,
-                    'list_number': list_index + 1,
-                    'selected_files': selected_paths,
-                    'total_duration': total_duration
-                })
+        results, newly_used_paths = generate_video_lists(
+            suitable_df=suitable_df,
+            durations=durations,
+            file_paths=file_paths,
+            used_video_paths=used_video_paths,
+            num_lists=1
+        )
         if not results:
             print("No video lists generated.")
             return

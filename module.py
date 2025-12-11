@@ -282,69 +282,87 @@ def prepare_original_data(csv_file):
         print(f"Unexpected error reading CSV: {str(e)}")
         return None, None, None, None
     
-def generate_video_lists(suitable_df, durations, last_used, file_paths):
-    results = []
-    for i in range(len(suitable_df)):
-        num_lists = 1  # Force number_of_vids to 1
-        desired_length = float(suitable_df.iloc[i]['desired length']) * 60
-        first_vid_number = str(suitable_df.iloc[i]['first vids'])
+def generate_video_lists(suitable_df, durations, file_paths, used_video_paths, num_lists=1):
 
-        #get first video
+    results = []
+    newly_used_paths = set()
+
+    # Duyệt từng dòng trong suitable_df
+    for group_index, (row_index, row) in enumerate(suitable_df.iterrows()):
+        desired_length = float(row['desired length']) * 60
+        first_vid_number = str(row['first vids'])
+
+        # Lấy video đầu
         first_vd = find_first_vid(first_vid_number)
         first_path, first_duration = first_vd[0], convert_time_to_seconds(first_vd[1])
         if not first_path:
             print(f"Không tìm thấy video đầu tiên cho {first_vid_number}")
             continue
-        
-        #get second video if exist
+
+        # Lấy second vids nếu có
         second_vid = None
         if 'second vids' in suitable_df.columns:
-            sv = suitable_df.iloc[i].get('second vids')
+            sv = row.get('second vids')
             if pd.notna(sv) and str(sv).strip():
-                second_vid = str(sv).strip()
-        
-        #get third video if exist
+                second_vid = str(sv).strip().strip('"')
+
+        # Lấy third vids nếu có
         third_vid = None
         if 'third vids' in suitable_df.columns:
-            tv = suitable_df.iloc[i].get('third vids')
+            tv = row.get('third vids')
             if pd.notna(tv) and str(tv).strip():
-                third_vid = str(tv).strip()
+                third_vid = str(tv).strip().strip('"')
 
         for list_index in range(num_lists):
+            # Chọn các index chưa dùng trong log
             available_indexes = [
                 idx for idx in range(len(file_paths))
-                if last_used[idx] >= 0
+                if file_paths[idx] not in used_video_paths
             ]
+
+            if not available_indexes:
+                print("Đã dùng hết video, reset log.")
+                used_video_paths.clear()
+                available_indexes = list(range(len(file_paths)))
 
             total_duration = first_duration
             selected_paths = [first_path]
+            newly_used_paths.add(first_path)
 
-            #add second vids to list
+            # Thêm second vids
             if second_vid:
                 selected_paths.append(second_vid)
                 total_duration += convert_time_to_seconds(get_video_duration(second_vid))
-            
-            #add third vids to list
+                newly_used_paths.add(second_vid)
+
+            # Thêm third vids
             if third_vid:
                 selected_paths.append(third_vid)
                 total_duration += convert_time_to_seconds(get_video_duration(third_vid))
+                newly_used_paths.add(third_vid)
 
-
+            # Thêm random các video khác cho tới khi đủ desired_length
             while available_indexes and total_duration < desired_length:
                 chosen_index = random.choice(available_indexes)
-                total_duration += durations[chosen_index]
-                selected_paths.append(file_paths[chosen_index])
+                path = file_paths[chosen_index]
+
+                if path not in used_video_paths:
+                    total_duration += durations[chosen_index]
+                    selected_paths.append(path)
+                    newly_used_paths.add(path)
+
                 available_indexes.remove(chosen_index)
 
             results.append({
                 'name': first_vid_number,
-                'group_index': i,
+                'group_index': group_index,  # dùng lại trong main để map sang original_df
                 'list_number': list_index + 1,
                 'selected_files': selected_paths,
                 'total_duration': total_duration
             })
 
-    return results
+    return results, newly_used_paths
+
 
 def format_and_print_results(results):
     for item in results:
