@@ -289,11 +289,26 @@ def generate_video_lists(suitable_df, durations, last_used, file_paths):
         desired_length = float(suitable_df.iloc[i]['desired length']) * 60
         first_vid_number = str(suitable_df.iloc[i]['first vids'])
 
+        #get first video
         first_vd = find_first_vid(first_vid_number)
         first_path, first_duration = first_vd[0], convert_time_to_seconds(first_vd[1])
         if not first_path:
             print(f"Không tìm thấy video đầu tiên cho {first_vid_number}")
             continue
+        
+        #get second video if exist
+        second_vid = None
+        if 'second vids' in suitable_df.columns:
+            sv = suitable_df.iloc[i].get('second vids')
+            if pd.notna(sv) and str(sv).strip():
+                second_vid = str(sv).strip()
+        
+        #get third video if exist
+        third_vid = None
+        if 'third vids' in suitable_df.columns:
+            tv = suitable_df.iloc[i].get('third vids')
+            if pd.notna(tv) and str(tv).strip():
+                third_vid = str(tv).strip()
 
         for list_index in range(num_lists):
             available_indexes = [
@@ -302,13 +317,22 @@ def generate_video_lists(suitable_df, durations, last_used, file_paths):
             ]
 
             total_duration = first_duration
-            selected_indexes = []
             selected_paths = [first_path]
+
+            #add second vids to list
+            if second_vid:
+                selected_paths.append(second_vid)
+                total_duration += convert_time_to_seconds(get_video_duration(second_vid))
+            
+            #add third vids to list
+            if third_vid:
+                selected_paths.append(third_vid)
+                total_duration += convert_time_to_seconds(get_video_duration(third_vid))
+
 
             while available_indexes and total_duration < desired_length:
                 chosen_index = random.choice(available_indexes)
                 total_duration += durations[chosen_index]
-                selected_indexes.append(chosen_index)
                 selected_paths.append(file_paths[chosen_index])
                 available_indexes.remove(chosen_index)
 
